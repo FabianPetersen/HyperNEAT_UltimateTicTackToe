@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net5.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="PeanutButter.XmlUtils" Version="2.0.29" />
+      <PackageReference Include="SharpNeatLib" Version="2.4.4" />
+    </ItemGroup>
+
+</Project>

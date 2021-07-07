@@ -35,7 +35,7 @@ namespace UltimateTicTacToe
         // 0000 0000 0101 0100 = 84
         private static ushort[] _winningCondition = new ushort[] {73, 146, 292, 7, 56, 448, 273, 84};
         private ushort _movesLeft = 9;
-        private bool _IsXturn = false; 
+        public bool _IsXturn = false; 
         
         // X - Player
         private ushort _xPos = 0;
@@ -57,6 +57,22 @@ namespace UltimateTicTacToe
             }
 
             _movesLeft -= 1;
+        }
+        
+        public void UnMakeMove(ushort position)
+        {
+            if (_IsXturn)
+            {
+                // Set a bit at position to 0.
+                _xPos &= (ushort) ~(1 << position);
+            }
+            else
+            {
+                // Set a bit at position to 0.
+                _oPos &= (ushort) ~(1 << position);
+            }
+
+            _movesLeft += 1;
         }
 
         public bool IsDraw()
@@ -108,7 +124,6 @@ namespace UltimateTicTacToe
         /// <returns></returns>
         public static ushort PlayUntilWin(IPlayer playerX, IPlayer playerO)
         {
-            
             Board board = new Board();
             while (true)
             {
@@ -120,6 +135,7 @@ namespace UltimateTicTacToe
                 {
                     return board._IsXturn ? (ushort) 2 : (ushort) 1;
                 }
+                board.MakeMove(move);
 
                 if (board.HasOWon())
                 {
@@ -201,7 +217,7 @@ namespace UltimateTicTacToe
     
     public class RandomPlayer : IPlayer
     {
-        private Random _random = new Random();
+        private static Random _random = new Random();
         
         public ushort GetMove(Board board)
         {
@@ -219,51 +235,166 @@ namespace UltimateTicTacToe
             }
         }
     }
+    
+    public class OptimalPlayer : IPlayer
+    {   
+        public ushort GetMove(Board board)
+        {
+            int moveNum = 0;
+            for (ushort i = 0; i < 9; i++)
+                if (board.IsValid(i))
+                {
+                    moveNum++;
+                }
+
+            switch (moveNum)
+            {
+                //first move is always a corner
+                case 0:
+                    return 0;
+                //second move should be the center if free, else a corner
+                case 1 when board.IsValid(4):
+                    return 4;
+                case 1:
+                    return 0;
+            }
+
+            //make a winning move if possible
+            for (ushort i = 0; i < 9; i++)
+            {
+                if (!board.IsValid(i))
+                    continue;
+                
+                board.MakeMove(i);
+                if (board.HasOWon() || board.HasXWon())
+                {
+                    board.UnMakeMove(i);
+                    return i;
+                }
+                board.UnMakeMove(i);
+            }
+            
+            board._IsXturn = !board._IsXturn;
+            //if we can't win, check if there are any moves that we have to make
+            //to prevent ourselves from losing
+            for (ushort i = 0; i < 9; i++)
+            {
+                if (!board.IsValid(i))
+                    continue;
+
+                board.MakeMove(i);
+                if (board.HasOWon() || board.HasXWon())
+                {
+                    board.UnMakeMove(i);
+                    board._IsXturn = !board._IsXturn;
+                    return i;
+                }
+                board.UnMakeMove(i);
+            }
+            board._IsXturn = !board._IsXturn;
+
+            //if we're here, that means we have made at least 1 move already and can't win
+            //nor lose in 1 move, so just make the optimal play which would be to a free
+            //corner that isn't blocked
+            ushort move = 0;
+            int max = -1;
+            for (ushort i = 0; i < 9; i++)
+            {
+                if (!board.IsValid(i))
+                    continue;
+                
+                board.MakeMove(i);
+
+                int count = 0;
+                for (ushort m = 0; m < 9; m++)
+                {
+                    if (!board.IsValid(m))
+                        continue;
+                    
+                    board.MakeMove(m);
+                    if (board.HasOWon() || board.HasXWon())
+                    {
+                        count++;
+                    }
+                    board.UnMakeMove(i);
+                }
+                board.UnMakeMove(i);
+                if (count > max)
+                {
+                    move = i;
+                    max = count;
+                }
+            }
+
+            return move;
+        }
+    }
 
     class Evaluator : IPhenomeEvaluator<IBlackBox>
     {
         bool shouldEnd = false;
-        private ulong _evalCount = 0;
+        private static ulong _evalCount = 0;
         public FitnessInfo Evaluate(IBlackBox phenome)
         {
             double fitness = 0;
             ushort result = 0;
             RandomPlayer randomPlayer = new RandomPlayer();
+            OptimalPlayer optimalPlayer = new OptimalPlayer();
             NeatPlayer neatPlayer = new NeatPlayer(phenome);
                      
-                     
             // Play 50 games as X against a random player
-            for (int i = 0; i < 1; i++)
+            for (int i = 0; i < 50; i++)
             {
                 // Compete the two players against each other.
                 result = Board.PlayUntilWin(neatPlayer, randomPlayer);
          
                 // Update the fitness score of the network
                 if (result == 1) fitness += 10;
+                if (result == 0) fitness += 1;
             }
          
             neatPlayer = new NeatPlayer(phenome, false);
             
             // Play 50 games as O against a random player
-            for (int i = 0; i < 1; i++)
+            for (int i = 0; i < 50; i++)
             {
                 // Compete the two players against each other.
                 result = Board.PlayUntilWin(randomPlayer, neatPlayer);
          
                 // Update the fitness score of the network
                 if (result == 2) fitness += 10;
+                if (result == 0) fitness += 1;
+            }
+
+            for (int i = 0; i < 2; i++)
+            {
+                // Compete the two players against each other.
+                result = Board.PlayUntilWin(neatPlayer, optimalPlayer);
+         
+                // Update the fitness score of the network
+                if (result == 1) fitness += 10;
+                if (result == 0) fitness += 1;
             }
             
+            for (int i = 0; i < 2; i++)
+            {
+                // Compete the two players against each other.
+                result = Board.PlayUntilWin(optimalPlayer, neatPlayer);
+         
+                // Update the fitness score of the network
+                if (result == 2) fitness += 10;
+                if (result == 0) fitness += 1;
+            }
+
             // Update the evaluation counter.
             _evalCount++;
          
             // If the network plays perfectly, it will beat the random player
             // and draw the optimal player.
-            if (fitness >= 100)
+            if (fitness >= 1004)
                 shouldEnd = true;
          
             // Return the fitness score
-            Console.WriteLine($"Evaluate {fitness}");
             return new FitnessInfo(fitness, fitness);
         }
 
@@ -291,6 +422,11 @@ namespace UltimateTicTacToe
  
         static void Main(string[] args)
         {
+            RandomPlayer randomXPlayer = new RandomPlayer();
+            RandomPlayer randomOPlayer = new RandomPlayer();
+
+            Board.PlayUntilWin(randomXPlayer, randomOPlayer);
+            
             Console.WriteLine("Starting training");
             // Initialise log4net (log to console).
             // XmlConfigurator.Configure(new FileInfo("log4net.properties"));
@@ -315,8 +451,7 @@ namespace UltimateTicTacToe
  
         static void ea_UpdateEvent(object sender, EventArgs e)
         {
-            Console.WriteLine(string.Format("gen={0:N0} bestFitness={1:N6}",
-                _ea.CurrentGeneration, _ea.Statistics._maxFitness));
+            Console.WriteLine($"gen={_ea.CurrentGeneration:N0} bestFitness={_ea.Statistics._maxFitness:N6}");
              
             // Save the best genome to file
             var doc = NeatGenomeXmlIO.SaveComplete(

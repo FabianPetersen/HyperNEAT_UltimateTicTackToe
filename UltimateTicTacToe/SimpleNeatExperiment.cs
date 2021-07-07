@@ -87,8 +87,8 @@ namespace UltimateTicTacToe
             _activationScheme = NetworkActivationScheme.CreateCyclicFixedTimestepsScheme(2);
             _parallelOptions = new ParallelOptions();
             _description = "Description";
-            _populationSize = 5;
-            _specieCount = 5;
+            _populationSize = 150;
+            _specieCount = 15;
             _eaParams = new NeatEvolutionAlgorithmParameters();
             _eaParams.SpecieCount = _specieCount;
             _neatGenomeParams = new NeatGenomeParameters();
